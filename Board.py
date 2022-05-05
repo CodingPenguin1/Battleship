@@ -67,6 +67,15 @@ class Board:
                 orientation = np.random.choice(['r', 'l', 'u', 'd'])
                 placed = self.place_ship(row, col, orientation, length, ship_name)
 
+    def shoot(self, row: int, col: int):
+        # Check if shot is on the grid
+        if row < 0 or row >= self.height or col < 0 or col >= self.width:
+            return False
+        # Make sure the 
+        if self.grid[row][col] < 0:
+            return False
+        return True
+
     def print(self, ships=True, misses=True, hits=True, ship_names=False):
         for row in range(self.height):
             for col in range(self.width):
