@@ -1,6 +1,8 @@
 import itertools
 from random import choice, randint
 
+from colorama import Back, Fore, Style
+
 
 class Board:
     def __init__(self, width=10, height=10):
@@ -69,6 +71,15 @@ class Board:
             return 'hit'
         return 'miss'
 
+    def game_over(self):
+        for row, col in itertools.product(range(self.height), range(self.width)):
+            if self.grid[row][col]['ship'] is not None and not self.grid[row][col]['shot']:
+                return False
+        return True
+
+    def reset(self):
+        self.grid = [[{'shot': False, 'ship': None} for _ in range(self.width)] for _ in range(self.height)]
+
     def print(self, ships=True, misses=True, hits=True, ship_names=False):
         name_list = []
         for row, col in itertools.product(range(self.height), range(self.width)):
@@ -79,12 +90,12 @@ class Board:
         for row in range(self.height):
             for col in range(self.width):
                 cur_space = self.grid[row][col]
-
-                print_char = '.'
+                print_char, color = '.', Fore.BLACK
 
                 # Miss
                 if misses and cur_space['shot'] and cur_space['ship'] is None:
                     print_char = 'O'
+                    color = Fore.WHITE
 
                 # Ships & hits
                 if cur_space['ship'] is not None:
@@ -92,9 +103,10 @@ class Board:
                         print_char = str(name_list.index(cur_space['ship']) + 1)
                     if hits and cur_space['shot']:
                         print_char = 'X'
+                        color = Fore.RED
 
-                print(print_char, end=' ')
-            print()
+                print(color + print_char, end=' ')
+            print(Fore.RESET)
 
         if ship_names:
             for ship_id, ship_name in enumerate(name_list):
