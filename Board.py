@@ -79,6 +79,9 @@ class Board:
         # Returns 'hit' if shot is a hit, but does not sink a ship
         # Returns (ship_name, ship_length) if shot is a hit and sinks a ship
 
+        # If shot is off the board, invalid
+        if row < 0 or row >= self.height or col < 0 or col >= self.width:
+            return False
         if self.grid[row][col]['shot']:
             return False
         self.grid[row][col]['shot'] = True

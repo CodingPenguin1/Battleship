@@ -40,22 +40,22 @@ def simulate_games_thread(ai, count):
 
         turns = 0
         while not board.game_over():
-            board = ai.play(board)
+            board = ai.shoot(board)
             turns += 1
         turn_counts.append(turns)
 
     return turn_counts
 
 
-def demo_game(ai=RandomAI()):
-    board = Board()
+def demo_game(board_width=10, board_height=10, ai=RandomAI()):
+    board = Board(board_width, board_height)
     board.place_ships_randomly()
     board.print(ship_names=True)
     print()
 
     while not board.game_over():
         input()
-        board = ai.play(board)
+        board = ai.shoot(board)
         board.print(ship_names=True, turn_number=True)
 
     board.print(ship_names=True, turn_number=True)
