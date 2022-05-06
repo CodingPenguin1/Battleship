@@ -63,6 +63,16 @@ class Board:
                 if self.place_ship(row, col, orientation, length, ship_name):
                     break
 
+    def get_ships_dict(self):
+        # Returns dict of structure {ship_name: {'length': length, 'sunk': boolean}}
+        ships = {}
+        for row, col in itertools.product(range(self.height), range(self.width)):
+            if self.grid[row][col]['ship'] is not None:
+                ship_name = self.grid[row][col]['ship']
+                if ship_name not in ships:
+                    ships[ship_name] = {'length': self.get_ship_length(ship_name), 'sunk': self.check_if_ship_is_sunk(ship_name)}
+        return ships
+
     def get_ship_length(self, ship_name):
         return sum(self.grid[row][col]['ship'] == ship_name for row, col in itertools.product(range(self.height), range(self.width)))
 
