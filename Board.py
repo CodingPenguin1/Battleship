@@ -63,11 +63,31 @@ class Board:
                 if self.place_ship(row, col, orientation, length, ship_name):
                     break
 
+    def get_ship_length(self, ship_name):
+        return sum(self.grid[row][col]['ship'] == ship_name for row, col in itertools.product(range(self.height), range(self.width)))
+
+    def check_if_ship_is_sunk(self, ship_name):
+        # Returns boolean True/False if ship_name is sunk
+        for row, col in itertools.product(range(self.height), range(self.width)):
+            if self.grid[row][col]['ship'] == ship_name and not self.grid[row][col]['shot']:
+                return False
+        return True
+
     def shoot(self, row: int, col: int):
+        # Returns `False` if shot is invalid
+        # Returns 'miss' if shot is a miss
+        # Returns 'hit' if shot is a hit, but does not sink a ship
+        # Returns (ship_name, ship_length) if shot is a hit and sinks a ship
+
         if self.grid[row][col]['shot']:
             return False
         self.grid[row][col]['shot'] = True
         if self.grid[row][col]['ship'] is not None:
+            # If ship was sunk, return (ship name, length)
+            ship_name = self.grid[row][col]['ship']
+            if self.check_if_ship_is_sunk(ship_name):
+                return ship_name, self.get_ship_length(self.grid[row][col]['ship'])
+            # If ship was not sunk, return 'hit'
             return 'hit'
         return 'miss'
 
@@ -77,15 +97,22 @@ class Board:
                 return False
         return True
 
+    def get_num_turns(self):
+        # Returns the number of turns the game has taken so far
+        return sum(self.grid[row][col]['shot'] for row, col in itertools.product(range(self.height), range(self.width)))
+
     def reset(self):
         self.grid = [[{'shot': False, 'ship': None} for _ in range(self.width)] for _ in range(self.height)]
 
-    def print(self, ships=True, misses=True, hits=True, ship_names=False):
+    def print(self, ships=True, misses=True, hits=True, ship_names=False, turn_number=False):
         name_list = []
         for row, col in itertools.product(range(self.height), range(self.width)):
             ship_name = self.grid[row][col]['ship']
             if ship_name is not None and ship_name not in name_list:
                 name_list.append(ship_name)
+
+        if turn_number:
+            print(f'Turn {self.get_num_turns()}')
 
         for row in range(self.height):
             for col in range(self.width):
@@ -110,30 +137,19 @@ class Board:
 
         if ship_names:
             for ship_id, ship_name in enumerate(name_list):
-                print(f'Ship {ship_id + 1}: {ship_name}')
+                if not self.check_if_ship_is_sunk(ship_name):
+                    print(f'{Back.GREEN}{Fore.BLACK}Ship {ship_id + 1}: {ship_name}{Back.RESET}{Fore.RESET}')
+                else:
+                    print(f'{Back.RED}Ship {ship_id + 1}: {ship_name}{Back.RESET}')
 
 
 if __name__ == '__main__':
     board = Board()
-    board.place_ships_randomly()
+    board.place_ship(0, 0, 'r', 5, 'carrier')
+    print(board.shoot(0, 0))
+    print(board.shoot(0, 1))
+    print(board.shoot(0, 2))
+    print(board.shoot(0, 3))
+    print(board.shoot(0, 4))
 
     board.print(ships=True, misses=True, hits=True, ship_names=True)
-    for i in range(10):
-        board.shoot(i, i)
-    print()
-    board.print(ships=False, misses=False, hits=False, ship_names=False)
-    print()
-    board.print(ships=True, misses=False, hits=False, ship_names=False)
-    print()
-    board.print(ships=False, misses=True, hits=True, ship_names=False)
-    print()
-    board.print(ships=True, misses=True, hits=True, ship_names=False)
-    print()
-    print()
-    board.print(ships=False, misses=False, hits=True, ship_names=False)
-    print()
-    board.print(ships=False, misses=True, hits=False, ship_names=False)
-    print()
-    board.print(ships=True, misses=False, hits=True, ship_names=False)
-    print()
-    board.print(ships=True, misses=True, hits=False, ship_names=False)
