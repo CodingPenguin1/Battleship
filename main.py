@@ -1,66 +1,100 @@
-#!/usr/bin/env python
-from concurrent.futures import ProcessPoolExecutor
-from copy import deepcopy
-from time import time
-from os import cpu_count
+from time import sleep
 
-import matplotlib.pyplot as plt
+import colorama
 
-from AIs import *
+import Players
 from Board import Board
 
 
-def simulate_games(num_games=100000, ai=RandomAI(), num_threads=cpu_count(), show_histogram=False):
-    ais = [deepcopy(ai) for _ in range(num_threads)]
-    game_list = [num_games // num_threads for _ in range(num_threads)]
-    print(f'Running {"{:,}".format(num_games)} games on {num_threads} threads with AI {ai.__class__.__name__}')
+def draw_player_boards(player_board, opponent_board):
+    player_board_string = player_board.draw(
+        show_ships_on_board=True,
+        show_shots_on_board=True,
+        show_turn_number=True,
+        show_ship_list=True,
+        show_damage=True,
+        color=False)
+    opponent_board_string = opponent_board.draw(
+        show_ships_on_board=False,
+        show_shots_on_board=True,
+        show_turn_number=False,
+        show_ship_list=True,
+        show_damage=False,
+        color=False)
 
-    turn_counts = []
-    t_start = time()
-    with ProcessPoolExecutor(num_threads) as executor:
-        results = executor.map(simulate_games_thread, ais, game_list)
-        for result in results:
-            turn_counts.extend(result)
-    t_end = time()
-    print(f'Time taken: {round(t_end - t_start, 2)}s')
+    player_board_list = player_board_string.split('\n')
+    opponent_board_list = [''] + opponent_board_string.split('\n')
 
-    if show_histogram:
-        plt.hist(turn_counts)
-        plt.show()
+    max_height = max(len(player_board_list), len(opponent_board_list))
+    max_length_player = max(len(line) for line in player_board_list)
+
+    combined_board_string = ''
+    for i in range(max_height):
+        if i < len(player_board_list):
+            combined_board_string += player_board_list[i]
+        else:
+            combined_board_string += ' ' * max_length_player
+
+        # Make sure the boards and ship lists are aligned
+        combined_board_string += ' ' * (max_length_player - len(player_board_list[i]))
+        if len(player_board_list[i]) == 18:
+            for c in range(18):
+                print(player_board_list[i][c], end='')
+        combined_board_string += '    '
+
+        if i < len(opponent_board_list):
+            combined_board_string += opponent_board_list[i]
+        combined_board_string += '\n'
+
+    # Add colors back in
+    combined_board_string = combined_board_string.replace('X', f'{colorama.Fore.RED}X{colorama.Style.RESET_ALL}')
+    combined_board_string = combined_board_string.replace('O', f'{colorama.Fore.BLUE}O{colorama.Style.RESET_ALL}')
+
+    for ship in player_board.ships:
+        # Get index of ship name or 2nd index if it appears twice
+        ship_index = [i for i, x in enumerate(player_board_string.split('\n')[0]) if x == ship.name][1]
 
 
-def simulate_games_thread(ai, count):
-    # Run `count` games with `ai`, return list of how many turns each game took
-    board = Board()
-    turn_counts = []
-
-    for _ in range(count):
-        board.reset()
-        board.place_ships_randomly()
-
-        turns = 0
-        while not board.game_over():
-            board = ai.shoot(board)
-            turns += 1
-        turn_counts.append(turns)
-
-    return turn_counts
 
 
-def demo_game(board_width=10, board_height=10, ai=RandomAI()):
-    board = Board(board_width, board_height)
-    board.place_ships_randomly()
-    board.print(ship_names=True)
-    print()
-
-    while not board.game_over():
-        input()
-        board = ai.shoot(board)
-        board.print(ship_names=True, turn_number=True)
-
-    board.print(ship_names=True, turn_number=True)
-    print(f'Game took {board.get_num_turns()} turns')
+    print(combined_board_string)
 
 
 if __name__ == '__main__':
-    demo_game(ai=RandomAI())
+    p1_board = Board(10, 10)
+    p2_board = Board(10, 10)
+    p1_board.place_ships_randomly()
+    p2_board.place_ships_randomly()
+    p1 = Players.RandomPlayer('Player 1')
+    p2 = Players.RandomPlayer('Player 2')
+
+    p2_board_params = {'show_ships_on_board': False, 'show_shots_on_board': True, 'show_turn_number': True, 'show_ship_list': True, 'show_damage': False, 'color': True}
+    p1_board_params = {'show_ships_on_board': True, 'show_shots_on_board': True, 'show_turn_number': True, 'show_ship_list': True, 'show_damage': True, 'color': True}
+
+    while True:
+        print(p2_board.draw_board_next_to(p1_board, p2_board_params, p1_board_params))
+        p1.shoot(p2_board)
+
+        if p2_board.all_ships_sunk():
+            winner = p1
+            break
+
+        print(p2_board.draw_board_next_to(p1_board, p2_board_params, p1_board_params))
+        p2.shoot(p1_board)
+
+        if p1_board.all_ships_sunk():
+            winner = p2
+            break
+
+        # sleep(0.5)
+
+    end_game_print_options = {
+        'show_ships_on_board': True,
+        'show_shots_on_board': True,
+        'show_turn_number': True,
+        'show_ship_list': True,
+        'show_damage': True,
+        'color': True,
+    }
+    print(p2_board.draw_board_next_to(p1_board, end_game_print_options, end_game_print_options))
+    print(f'{winner.name} won!')

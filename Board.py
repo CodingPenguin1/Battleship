@@ -1,168 +1,332 @@
-import itertools
+import contextlib
 from random import choice, randint
-
 from colorama import Back, Fore, Style
-
 
 class Board:
     def __init__(self, width=10, height=10):
         self.width = width
         self.height = height
-        self.grid = [[{'shot': False, 'ship': None} for _ in range(width)] for _ in range(height)]
+        assert 5 < width <= 26, 'Width must be between 5 and 26'
+        assert 5 < height <= 26, 'Height must be between 5 and 26'
 
-    def place_ship(self, row: int, col: int, orientation: str, length: int, ship_name: str):
-        # Figure out how to itarate through row or col depending on what orientation is
-        row_increment, col_increment = 0, 0
-        if orientation.lower() == 'r':
-            col_increment = 1
-        elif orientation.lower() == 'l':
-            col_increment = -1
-        elif orientation.lower() == 'u':
-            row_increment = -1
-        elif orientation.lower() == 'd':
-            row_increment = 1
+        self.shots = []  # [(r, c), (r, c), ...]  list of spaces shot
+        self.ships = {}  # {ship: [(r, c), (r, c), ...], ...}
 
-        # Check to see if placement is valid
-        valid = True
+    def add_ship(self, ship_name, ship_length, row, col, orientation):
+        # Check if ship is out of bounds
+        if orientation == 'v' and row + ship_length > self.height:
+            raise ValueError('Ship out of bounds')
+        elif orientation == 'h' and col + ship_length > self.width:
+            raise ValueError('Ship out of bounds')
 
-        # If the ship will be placed off the board, invalid
-        if orientation == 'r' and col + length > self.width:
-            return False
-        elif orientation == 'l' and col - length < -1:
-            return False
-        elif orientation == 'u' and row - length < -1:
-            return False
-        elif orientation == 'd' and row + length > self.height:
-            return False
+        # Check if ship overlaps another ship
+        new_ship_coords = []
+        for i in range(ship_length):
+            if orientation == 'v':
+                new_ship_coords.append((row + i, col))
+            elif orientation == 'h':
+                new_ship_coords.append((row, col + i))
+        for ship_coords in self.ships.values():
+            for coord in new_ship_coords:
+                if coord in ship_coords:
+                    raise ValueError('Ship overlaps another ship')
 
-        # If overlapping another ship, invalid
-        cur_row, cur_col = row, col
-        while abs(cur_row - row) < length and abs(cur_col - col) < length:
-            if self.grid[cur_row][cur_col]['ship'] is not None:
-                return False
-            cur_row += row_increment
-            cur_col += col_increment
-
-        # If valid, place ship
-        cur_row, cur_col = row, col
-        while abs(cur_row - row) < length and abs(cur_col - col) < length:
-            self.grid[cur_row][cur_col]['ship'] = ship_name
-            cur_row += row_increment
-            cur_col += col_increment
-        return True
+        # If ship is in bounds, add it to the board
+        if orientation == 'v':
+            self.ships[ship_name] = [(row + i, col) for i in range(ship_length)]
+        elif orientation == 'h':
+            self.ships[ship_name] = [(row, col + i) for i in range(ship_length)]
 
     def place_ships_randomly(self, ships=None):
         if ships is None:
-            ships = {'carrier': 5, 'battleship': 4, 'cruiser': 3, 'submarine': 3, 'destroyer': 2}
-
-        for ship_name, length in ships.items():
+            ships = {'Carrier': 5, 'Battleship': 4, 'Cruiser': 3, 'Submarine': 3, 'Destroyer': 2}
+        for ship_name, ship_length in ships.items():
             while True:
-                orientation = choice(['r', 'l', 'u', 'd'])
+                orientation = choice(['v', 'h'])
                 row = randint(0, self.height - 1)
                 col = randint(0, self.width - 1)
-                if self.place_ship(row, col, orientation, length, ship_name):
+                with contextlib.suppress(ValueError):
+                    self.add_ship(ship_name, ship_length, row, col, orientation)
                     break
 
-    def get_ships_dict(self):
-        # Returns dict of structure {ship_name: {'length': length, 'sunk': boolean}}
-        ships = {}
-        for row, col in itertools.product(range(self.height), range(self.width)):
-            if self.grid[row][col]['ship'] is not None:
-                ship_name = self.grid[row][col]['ship']
-                if ship_name not in ships:
-                    ships[ship_name] = {'length': self.get_ship_length(ship_name), 'sunk': self.check_if_ship_is_sunk(ship_name)}
-        return ships
-
-    def get_ship_length(self, ship_name):
-        return sum(self.grid[row][col]['ship'] == ship_name for row, col in itertools.product(range(self.height), range(self.width)))
-
-    def check_if_ship_is_sunk(self, ship_name):
-        # Returns boolean True/False if ship_name is sunk
-        for row, col in itertools.product(range(self.height), range(self.width)):
-            if self.grid[row][col]['ship'] == ship_name and not self.grid[row][col]['shot']:
-                return False
-        return True
-
-    def shoot(self, row: int, col: int):
-        # Returns `False` if shot is invalid
-        # Returns 'miss' if shot is a miss
-        # Returns 'hit' if shot is a hit, but does not sink a ship
-        # Returns (ship_name, ship_length) if shot is a hit and sinks a ship
-
-        # If shot is off the board, invalid
+    def shoot(self, row, col):
+        # Check if shot is out of bounds
         if row < 0 or row >= self.height or col < 0 or col >= self.width:
-            return False
-        if self.grid[row][col]['shot']:
-            return False
-        self.grid[row][col]['shot'] = True
-        if self.grid[row][col]['ship'] is not None:
-            # If ship was sunk, return (ship name, length)
-            ship_name = self.grid[row][col]['ship']
-            if self.check_if_ship_is_sunk(ship_name):
-                return ship_name, self.get_ship_length(self.grid[row][col]['ship'])
-            # If ship was not sunk, return 'hit'
-            return 'hit'
-        return 'miss'
+            raise ValueError('Shot out of bounds')
 
-    def game_over(self):
-        for row, col in itertools.product(range(self.height), range(self.width)):
-            if self.grid[row][col]['ship'] is not None and not self.grid[row][col]['shot']:
-                return False
-        return True
+        # Check if shot has already been taken
+        if (row, col) in self.shots:
+            raise ValueError('Shot already taken')
+
+        # If shot is in bounds, mark it on the board
+        self.shots.append((row, col))
+
+    def is_sunk(self, ship_name):
+        return all(space in self.shots for space in self.ships[ship_name])
+
+    def all_ships_sunk(self):
+        return all(self.is_sunk(ship_name) for ship_name in self.ships)
+
+    def get_ship_states(self):
+        # Return a dictionary of {ship_name: "healthy", "damaged", or "sunk"}
+        ship_states = {}
+        for ship_name in self.ships:
+            if self.is_sunk(ship_name):
+                ship_states[ship_name] = 'sunk'
+            else:
+                for row, col in self.ships[ship_name]:
+                    if (row, col) in self.shots:
+                        ship_states[ship_name] = 'damaged'
+                        break
+                else:
+                    ship_states[ship_name] = 'healthy'
+        return ship_states
 
     def get_num_turns(self):
-        # Returns the number of turns the game has taken so far
-        return sum(self.grid[row][col]['shot'] for row, col in itertools.product(range(self.height), range(self.width)))
+        return len(self.shots)
+
+    def cell_to_row_col(self, cell):
+        row = int(cell[1:])
+        col = ord(cell[0].upper()) - 65
+        return row, col
 
     def reset(self):
-        self.grid = [[{'shot': False, 'ship': None} for _ in range(self.width)] for _ in range(self.height)]
+        self.shots = []
+        self.ships = {}
 
-    def print(self, ships=True, misses=True, hits=True, ship_names=False, turn_number=False):
-        name_list = []
-        for row, col in itertools.product(range(self.height), range(self.width)):
-            ship_name = self.grid[row][col]['ship']
-            if ship_name is not None and ship_name not in name_list:
-                name_list.append(ship_name)
+    def draw(self, show_ships_on_board=False, show_shots_on_board=True, show_turn_number=True, show_ship_list=True, show_damage=False, color=True):
+        board_string = ''
 
-        if turn_number:
-            print(f'Turn {self.get_num_turns()}')
+        # Draw the turn number
+        if show_turn_number:
+            board_string += f'Turn: {len(self.shots)}\n'
 
+        # Draw the column letters
+        board_string += '   '
+        for col in range(self.width):
+            board_string += f'{chr(col + 65)} '
+        board_string += '\n'
+
+        # Draw the top border
+        board_string += '  '
+        for _ in range(self.width):
+            board_string += '+-'
+        board_string += '+\n'
+
+        # Draw the board, including ships if applicable
+        board = [['.' for _ in range(self.width)] for _ in range(self.height)]
+        if show_ships_on_board:
+            for ship_name, ship_coords in self.ships.items():
+                for row, col in ship_coords:
+                    board[row][col] = ship_name[0].upper()
+        if show_shots_on_board:
+            for row, col in self.shots:
+                shot_type = 'miss'
+                for ship_name in self.ships:
+                    if (row, col) in self.ships[ship_name]:
+                        shot_type = 'sunk' if self.is_sunk(ship_name) else 'hit'
+                if shot_type == 'hit' and show_damage:
+                    board[row][col] = f'{Fore.YELLOW}X{Style.RESET_ALL}' if color else 'X'
+                elif shot_type == 'miss':
+                    board[row][col] = f'{Fore.CYAN}O{Style.RESET_ALL}' if color else 'O'
+                elif shot_type == 'sunk' or (not show_damage and shot_type == 'hit'):
+                    board[row][col] = f'{Fore.RED}X{Style.RESET_ALL}' if color else 'X'
         for row in range(self.height):
+            board_string += f'{row:2d}|'
             for col in range(self.width):
-                cur_space = self.grid[row][col]
-                print_char, color = '.', Fore.BLACK
+                board_string += f'{board[row][col]} '
+            board_string = board_string[:-1] + '|\n'
 
-                # Miss
-                if misses and cur_space['shot'] and cur_space['ship'] is None:
-                    print_char = 'O'
-                    color = Fore.WHITE
+        # Draw the bottom border
+        board_string += '  '
+        for _ in range(self.width):
+            board_string += '+-'
+        board_string += '+\n'
 
-                # Ships & hits
-                if cur_space['ship'] is not None:
-                    if ships:
-                        print_char = str(name_list.index(cur_space['ship']) + 1)
-                    if hits and cur_space['shot']:
-                        print_char = 'X'
-                        color = Fore.RED
-
-                print(color + print_char, end=' ')
-            print(Fore.RESET)
-
-        if ship_names:
-            for ship_id, ship_name in enumerate(name_list):
-                if not self.check_if_ship_is_sunk(ship_name):
-                    print(f'{Back.GREEN}{Fore.BLACK}Ship {ship_id + 1}: {ship_name}{Back.RESET}{Fore.RESET}')
+        # Draw the ship list
+        if show_ship_list:
+            board_string += 'Ships:\n'
+            ship_states = self.get_ship_states()
+            for ship_name in ship_states.keys():
+                if (
+                    ship_states[ship_name] != 'sunk'
+                    and ship_states[ship_name] == 'damaged'
+                    and show_damage
+                    and color
+                ):
+                    board_string += f'  {Back.YELLOW}{ship_name}{Style.RESET_ALL}\n'
+                elif (
+                    ship_states[ship_name] != 'sunk'
+                    and ship_states[ship_name] == 'damaged'
+                    and show_damage
+                    or ship_states[ship_name] != 'sunk'
+                    and not color
+                ):
+                    board_string += f'  {ship_name}\n'
+                elif ship_states[ship_name] != 'sunk':
+                    board_string += f'  {Back.GREEN}{ship_name}{Style.RESET_ALL}\n'
                 else:
-                    print(f'{Back.RED}Ship {ship_id + 1}: {ship_name}{Back.RESET}')
+                    board_string += (
+                        f'  {Back.RED}{ship_name}{Style.RESET_ALL}\n'
+                        if color
+                        else f'  {ship_name}\n'
+                    )
+        return board_string
+
+    def draw_board_next_to(self, board, first_board_draw_parameters, second_board_draw_parameters, gap=3):
+        MAX_WIDTH = self.width * 2 + 3
+        string = ''
+
+        # Draw the turn number
+        if first_board_draw_parameters['show_turn_number']:
+            string += f'Turn: {len(self.shots)}'
+            string += ' ' * (MAX_WIDTH - len(string))
+        string += ' ' * gap
+        if second_board_draw_parameters['show_turn_number']:
+            string += f'Turn: {len(board.shots)}'
+        string += '\n'
+
+        # Draw the column letters
+        string += '   '
+        for col in range(self.width):
+            string += f'{chr(col + 65)} '
+        string += ' ' * gap
+        string += '   '
+        for col in range(board.width):
+            string += f'{chr(col + 65)} '
+        string += '\n'
+
+        # Draw the top border
+        string += '  '
+        for _ in range(self.width):
+            string += '+-'
+        string += '+'
+        string += ' ' * gap
+        string += '  '
+        for _ in range(board.width):
+            string += '+-'
+        string += '+\n'
+
+        # Draw the board, including ships if applicable
+        board1 = [['.' for _ in range(self.width)] for _ in range(self.height)]
+        board2 = [['.' for _ in range(board.width)] for _ in range(board.height)]
+        if first_board_draw_parameters['show_ships_on_board']:
+            for ship_name, ship_coords in self.ships.items():
+                for row, col in ship_coords:
+                    board1[row][col] = ship_name[0].upper()
+        if first_board_draw_parameters['show_shots_on_board']:
+            for row, col in self.shots:
+                shot_type = 'miss'
+                for ship_name in self.ships:
+                    if (row, col) in self.ships[ship_name]:
+                        shot_type = 'sunk' if self.is_sunk(ship_name) else 'hit'
+                if shot_type == 'hit' and first_board_draw_parameters['show_damage']:
+                    board1[row][col] = f'{Fore.YELLOW}X{Style.RESET_ALL}' if first_board_draw_parameters['color'] else 'X'
+                elif shot_type == 'miss':
+                    board1[row][col] = f'{Fore.CYAN}O{Style.RESET_ALL}' if first_board_draw_parameters['color'] else 'O'
+                elif shot_type == 'sunk' or (not first_board_draw_parameters['show_damage'] and shot_type == 'hit'):
+                    board1[row][col] = f'{Fore.RED}X{Style.RESET_ALL}' if first_board_draw_parameters['color'] else 'X'
+        if second_board_draw_parameters['show_ships_on_board']:
+            for ship_name, ship_coords in board.ships.items():
+                for row, col in ship_coords:
+                    board2[row][col] = ship_name[0].upper()
+        if second_board_draw_parameters['show_shots_on_board']:
+            for row, col in board.shots:
+                shot_type = 'miss'
+                for ship_name in board.ships:
+                    if (row, col) in board.ships[ship_name]:
+                        shot_type = 'sunk' if board.is_sunk(ship_name) else 'hit'
+                if shot_type == 'hit' and second_board_draw_parameters['show_damage']:
+                    board2[row][col] = f'{Fore.YELLOW}X{Style.RESET_ALL}' if second_board_draw_parameters['color'] else 'X'
+                elif shot_type == 'miss':
+                    board2[row][col] = f'{Fore.CYAN}O{Style.RESET_ALL}' if second_board_draw_parameters['color'] else 'O'
+                elif shot_type == 'sunk' or (not second_board_draw_parameters['show_damage'] and shot_type == 'hit'):
+                    board2[row][col] = f'{Fore.RED}X{Style.RESET_ALL}' if second_board_draw_parameters['color'] else 'X'
+        for row in range(self.height):
+            string += f' {row}|'
+            for col in range(self.width):
+                string += f'{board1[row][col]} '
+            string += '\b|'
+            string += ' ' * gap
+            string += f' {row}|'
+            for col in range(board.width):
+                string += f'{board2[row][col]} '
+            string += '\b|\n'
+
+        # Draw the bottom border
+        string += '  '
+        for _ in range(self.width):
+            string += '+-'
+        string += '+'
+        string += ' ' * gap
+        string += '  '
+        for _ in range(board.width):
+            string += '+-'
+        string += '+\n'
+
+        # Draw the ship list
+        health_colors = {'healthy': Back.GREEN, 'damaged': Back.YELLOW, 'sunk': Back.RED}
+        my_ship_strings = []
+        if first_board_draw_parameters['show_ship_list']:
+            for i in range(len(self.ships)):
+                ship_states = self.get_ship_states()
+                ship_name = list(ship_states.keys())[i]
+                if first_board_draw_parameters['color']:
+                    my_ship_strings.append(f'{health_colors[ship_states[ship_name]]}{ship_name}{Style.RESET_ALL}' + ' ' * (MAX_WIDTH - len(ship_name)))
+                else:
+                    my_ship_strings.append(f'{ship_name}' + ' ' * (MAX_WIDTH - len(ship_name)))
+        opponent_ship_strings = []
+        if second_board_draw_parameters['show_ship_list']:
+            for i in range(len(board.ships)):
+                ship_states = board.get_ship_states()
+                ship_name = list(ship_states.keys())[i]
+                if second_board_draw_parameters['color']:
+                    opponent_ship_strings.append(f'{health_colors[ship_states[ship_name]]}{ship_name}{Style.RESET_ALL}' + ' ' * (MAX_WIDTH - len(ship_name)))
+                else:
+                    opponent_ship_strings.append(f'{ship_name}')
+
+        if first_board_draw_parameters['show_ship_list'] and second_board_draw_parameters['show_ship_list']:
+            string += 'Ships:'.ljust(self.width * 2 + 3 + gap) + 'Ships:\n'
+            for i in range(len(my_ship_strings)):
+                string += f'  {my_ship_strings[i]}'
+                string += gap * ' '
+                string += opponent_ship_strings[i] + '\n'
+        elif first_board_draw_parameters['show_ship_list']:
+            string += 'Ships:\n'
+            for i in range(len(self.ships)):
+                string += f'  {my_ship_strings[i]}' + '\n'
+        elif second_board_draw_parameters['show_ship_list']:
+            string += ' ' * (self.width * 2 + 3 + gap) + 'Ships:\n'
+            for i in range(len(board.ships)):
+                string += ' ' * (self.width * 2 + 3 + gap) + '  ' + opponent_ship_strings[i] + '\n'
+
+        return string
 
 
 if __name__ == '__main__':
-    board = Board()
-    board.place_ship(0, 0, 'r', 5, 'carrier')
-    print(board.shoot(0, 0))
-    print(board.shoot(0, 1))
-    print(board.shoot(0, 2))
-    print(board.shoot(0, 3))
-    print(board.shoot(0, 4))
+    p = Board()
+    e = Board()
+    p.place_ships_randomly()
+    e.place_ships_randomly()
 
-    board.print(ships=True, misses=True, hits=True, ship_names=True)
+    player_print_options = {
+        'show_ships_on_board': True,
+        'show_shots_on_board': True,
+        'show_turn_number': True,
+        'show_ship_list': True,
+        'show_damage': True,
+        'color': True,
+    }
+    enemy_print_options = {
+        'show_ships_on_board': True,
+        'show_shots_on_board': True,
+        'show_turn_number': True,
+        'show_ship_list': True,
+        'show_damage': True,
+        'color': True,
+    }
+
+    p.shoot(0, 0)
+    e.shoot(1, 2)
+
+    print(p.draw_board_next_to(e, player_print_options, enemy_print_options))
