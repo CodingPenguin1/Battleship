@@ -12,41 +12,65 @@ class Board:
         self.shots = []  # [(r, c), (r, c), ...]  list of spaces shot
         self.ships = {}  # {ship: [(r, c), (r, c), ...], ...}
 
-    def add_ship(self, ship_name, ship_length, row, col, orientation):
+    def can_place_ship(self, ship_length, row, col, orientation):
         # Check if ship is out of bounds
-        if orientation == 'v' and row + ship_length > self.height:
-            raise ValueError('Ship out of bounds')
-        elif orientation == 'h' and col + ship_length > self.width:
-            raise ValueError('Ship out of bounds')
+        if orientation == 'l' and col - ship_length < 0:
+            return False
+        elif orientation == 'r' and col + ship_length > self.width:
+            return False
+        elif orientation == 'u' and row - ship_length < 0:
+            return False
+        elif orientation == 'd' and row + ship_length > self.height:
+            return False
 
         # Check if ship overlaps another ship
         new_ship_coords = []
         for i in range(ship_length):
-            if orientation == 'v':
-                new_ship_coords.append((row + i, col))
-            elif orientation == 'h':
+            if orientation == 'l':
+                new_ship_coords.append((row, col - i))
+            elif orientation == 'r':
                 new_ship_coords.append((row, col + i))
+            elif orientation == 'u':
+                new_ship_coords.append((row - i, col))
+            elif orientation == 'd':
+                new_ship_coords.append((row + i, col))
         for ship_coords in self.ships.values():
             for coord in new_ship_coords:
                 if coord in ship_coords:
-                    raise ValueError('Ship overlaps another ship')
+                    return False
+
+        # Check if ship overlaps a space that's been shot
+        for coord in new_ship_coords:
+            if coord in self.shots:
+                return False
+
+        return True
+
+
+    def add_ship(self, ship_name, ship_length, row, col, orientation):
+        if not self.can_place_ship(ship_length, row, col, orientation):
+            return False
 
         # If ship is in bounds, add it to the board
-        if orientation == 'v':
-            self.ships[ship_name] = [(row + i, col) for i in range(ship_length)]
-        elif orientation == 'h':
+        if orientation == 'l':
+            self.ships[ship_name] = [(row, col - i) for i in range(ship_length)]
+        elif orientation == 'r':
             self.ships[ship_name] = [(row, col + i) for i in range(ship_length)]
+        elif orientation == 'u':
+            self.ships[ship_name] = [(row - i, col) for i in range(ship_length)]
+        elif orientation == 'd':
+            self.ships[ship_name] = [(row + i, col) for i in range(ship_length)]
+        return True
 
     def place_ships_randomly(self, ships=None):
         if ships is None:
             ships = {'Carrier': 5, 'Battleship': 4, 'Cruiser': 3, 'Submarine': 3, 'Destroyer': 2}
         for ship_name, ship_length in ships.items():
             while True:
-                orientation = choice(['v', 'h'])
+                orientation = choice(['u', 'd', 'l', 'r'])
                 row = randint(0, self.height - 1)
                 col = randint(0, self.width - 1)
-                with contextlib.suppress(ValueError):
-                    self.add_ship(ship_name, ship_length, row, col, orientation)
+                if self.add_ship(ship_name, ship_length, row, col, orientation):
                     break
 
     def shoot(self, row, col):
@@ -60,6 +84,15 @@ class Board:
 
         # If shot is in bounds, mark it on the board
         self.shots.append((row, col))
+
+        # Return miss, hit, or sunk
+        for ship_name in self.ships:
+            if (row, col) in self.ships[ship_name]:
+                if self.is_sunk(ship_name):
+                    return 'sunk'
+                else:
+                    return 'hit'
+        return 'miss'
 
     def is_sunk(self, ship_name):
         return all(space in self.shots for space in self.ships[ship_name])
