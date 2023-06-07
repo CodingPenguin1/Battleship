@@ -1,6 +1,8 @@
 import contextlib
 import random
 
+from colorama import Fore
+
 
 class Player:
     def __init__(self, name):
@@ -18,18 +20,23 @@ class HumanPlayer(Player):
         super().__init__(name)
 
     def shoot(self, board):
+        error_printed = False
         while True:
-            try:
-                cell = input(f'{self.name}, enter a cell to shoot (e.g. A5): ')
-                # TODO: account for larger boards
-                if len(cell) != 2 or not cell[0].isalpha() or not cell[1].isdigit():
-                    raise ValueError('Invalid cell')  # TODO: Make this not error
+            cell = input(f'{self.name}, enter a cell to shoot (e.g. A5): ')
+            valid_format = True
+            if not cell[0].isalpha():
+                valid_format = False
+            if not cell[1:].isdigit():
+                valid_format = False
+
+            if valid_format:
                 row, col = board.cell_to_row_col(cell)
-                print(row, col)
                 board.shoot(row, col)
                 break
-            except ValueError as err:
-                print(err)
+            else:
+                if not error_printed:
+                    print(f'{Fore.RED}Invalid format. Please enter a cell in the format A5{Fore.RESET}')
+                    error_printed = True
 
 
 class RandomPlayer(Player):

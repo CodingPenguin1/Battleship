@@ -173,7 +173,7 @@ class Board:
                     )
         return board_string
 
-    def draw_board_next_to(self, board, first_board_draw_parameters, second_board_draw_parameters, gap=3):
+    def draw_board_next_to(self, board, first_board_draw_parameters, second_board_draw_parameters, first_board_name=None, second_board_name=None, gap=3):
         MAX_WIDTH = self.width * 2 + 3
         string = ''
 
@@ -184,6 +184,15 @@ class Board:
         string += ' ' * gap
         if second_board_draw_parameters['show_turn_number']:
             string += f'Turn: {len(board.shots)}'
+        string += '\n'
+
+        # Draw the board names
+        if first_board_name is not None:
+            string += f'{first_board_name}'
+            string += ' ' * (MAX_WIDTH - len(first_board_name))
+        string += ' ' * gap
+        if second_board_name is not None:
+            string += f'{second_board_name}'
         string += '\n'
 
         # Draw the column letters
